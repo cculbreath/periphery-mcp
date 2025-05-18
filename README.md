@@ -98,14 +98,73 @@ Performs comprehensive static analysis to detect unused code.
 
 ## Integration with Claude Desktop
 
-To use this server with Claude Desktop:
+To use this server with Claude Desktop, you need to add it to your MCP configuration:
 
-1. **Start the server** as shown above
-2. **Configure Claude Desktop** to connect to `http://localhost:4000`
-3. **Use natural language** to analyze your projects:
-   - "Scan my iOS project for dead code"
-   - "Check if my project builds successfully"
-   - "Set up Periphery for my new Swift project"
+### Step 1: Add to Claude Desktop Configuration
+
+Edit your Claude Desktop configuration file (located at `~/Library/Application Support/Claude/claude_desktop_config.json`) and add the following entry to the `mcpServers` section:
+
+```json
+{
+  "mcpServers": {
+    "periphery-mcp": {
+      "command": "/path/to/conda/envs/periphery-mcp/bin/python",
+      "args": [
+        "/path/to/periphery-mcp/periphery-mcp-server.py"
+      ],
+      "env": {
+        "CONDA_DEFAULT_ENV": "periphery-mcp"
+      }
+    }
+  }
+}
+```
+
+**Replace the paths** with your actual installation paths:
+- `/path/to/conda/envs/periphery-mcp/bin/python` → Your conda environment Python executable
+- `/path/to/periphery-mcp/periphery-mcp-server.py` → Path to this server script
+
+### Step 2: Find Your Python Path
+
+To find your conda environment Python path:
+```bash
+conda activate periphery-mcp
+which python
+```
+
+### Step 3: Restart Claude Desktop
+
+After updating the configuration, restart Claude Desktop for the changes to take effect.
+
+### Step 4: Use Natural Language Commands
+
+Once configured, you can use natural language to analyze your projects:
+- "Scan my iOS project for dead code"
+- "Check if my project builds successfully"
+- "Set up Periphery for my new Swift project"
+
+### Alternative: Using a Startup Script
+
+For easier configuration, you can create a startup script:
+
+```bash
+#!/bin/bash
+source /path/to/miniconda/etc/profile.d/conda.sh
+conda activate periphery-mcp
+cd /path/to/periphery-mcp
+python periphery-mcp-server.py
+```
+
+Then use this simpler configuration:
+```json
+{
+  "mcpServers": {
+    "periphery-mcp": {
+      "command": "/path/to/periphery-mcp/start-server.sh"
+    }
+  }
+}
+```
 
 ## Workflow Example
 
