@@ -1,10 +1,10 @@
 # Periphery MCP Server
 
-A Model Context Protocol (MCP) server that exposes [Periphery](https://github.com/peripheryapp/periphery) static analysis capabilities for iOS/macOS projects through a simple HTTP API.
+A Model Context Protocol (MCP) server that exposes [Periphery](https://github.com/peripheryapp/periphery) static analysis capabilities for iOS/macOS projects through the **Model Context Protocol over a standard input/output (stdio) transport**.
 
 ## Overview
 
-This server wraps Periphery's dead code detection functionality, making it accessible to MCP clients like Claude Desktop. It provides automated setup, build verification, and comprehensive static analysis scanning for Swift/Objective-C projects.
+This server wraps Periphery's dead-code-detection functionality, making it accessible to MCP-aware clients such as Claude Desktop.  Communication happens entirely over MCP's stdio transport—**no HTTP server is started or exposed**.  The server provides automated setup, build verification, and comprehensive static-analysis scanning for Swift/Objective-C projects.
 
 ## Features
 
@@ -31,12 +31,14 @@ This server wraps Periphery's dead code detection functionality, making it acces
    ```
 3. **Install dependencies**:
    ```bash
-   pip install 'mcp[cli]==1.*' fastapi uvicorn pexpect rich
+   pip install "mcp[cli]==1.*" pexpect rich
    ```
 
 ## Usage
 
 ### Starting the Server
+
+The server runs as an MCP stdio transport (for integration with Claude Desktop):
 
 ```bash
 cd /path/to/periphery-mcp
@@ -44,9 +46,7 @@ conda activate periphery-mcp
 python periphery-mcp-server.py
 ```
 
-The server will start on `http://localhost:4000` and provide the following endpoints:
-- `/mcp/metadata` - Server capabilities and tool definitions
-- `/mcp/invoke/<tool>` - Tool execution endpoints
+When integrated with Claude Desktop, the server communicates over stdin/stdout. For standalone testing, you can use the MCP CLI tools.
 
 ### Available Tools
 
@@ -143,28 +143,33 @@ Once configured, you can use natural language to analyze your projects:
 - "Check if my project builds successfully"
 - "Set up Periphery for my new Swift project"
 
-### Alternative: Using a Startup Script
+### Alternative: Using the Included Startup Script
 
-For easier configuration, you can create a startup script:
+For easier configuration, you can use the included startup script that automatically detects your conda installation:
 
 ```bash
-#!/bin/bash
-source /path/to/miniconda/etc/profile.d/conda.sh
-conda activate periphery-mcp
-cd /path/to/periphery-mcp
-python periphery-mcp-server.py
+chmod +x start-server.sh
+./start-server.sh
 ```
 
-Then use this simpler configuration:
+The startup script will:
+- Automatically detect common conda installation locations
+- Change to the correct directory
+- Activate the periphery-mcp environment
+- Start the server
+
+Then use this simpler Claude Desktop configuration:
 ```json
 {
   "mcpServers": {
     "periphery-mcp": {
-      "command": "/path/to/periphery-mcp/start-server.sh"
+      "command": "/absolute/path/to/periphery-mcp/start-server.sh"
     }
   }
 }
 ```
+
+Replace `/absolute/path/to/periphery-mcp/` with the actual path to your project directory.
 
 ## Workflow Example
 
@@ -183,7 +188,125 @@ The server automatically handles Periphery configuration through interactive set
 
 ## Troubleshooting
 
+### Command-Line Testing
+
+You can test the tools directly from the command line without Claude Desktop:
+
+```bash
+# Test scanning a project
+python cli_test.py scan /path/to/your/ios/project
+
+# Test building a project (optionally specify scheme)
+python cli_test.py build /path/to/your/ios/project [scheme]
+
+# Test Periphery setup
+python cli_test.py setup /path/to/your/ios/project
+
+# Scan with extra Periphery arguments
+python cli_test.py scan /path/to/your/ios/project --verbose
+```
+
+This will show you exactly what each tool returns and help identify any issues with:
+- Path resolution
+- Periphery installation
+- Project build issues
+- Configuration problems
+
+### Tool Timeouts and No Feedback
+
+If you're experiencing timeouts when using the tools in Claude Desktop:
+
+1. **Test from Command Line First**: Use `python cli_test.py scan /path/to/project` to verify the tool works outside of Claude Desktop
+
+2. **Check Claude Desktop Logs**: Look for debug output in Claude Desktop's logs
+   - Open Claude Desktop
+   - Go to Help → Show Logs or check console output
+   - Look for `[PERIPHERY-MCP DEBUG]` messages
+
+3. **Test the Server Functions**: Use the included test script:
+   ```bash
+   python test_tools.py
+   ```
+   This tests the tool functions directly without MCP protocol overhead.
+
+4. **Debug Steps**:
+   - First, test with CLI: `python cli_test.py scan /your/project/path`
+   - Check Claude Desktop logs for MCP communication errors
+   - Verify your project path is correct and accessible
+   - Ensure all prerequisites are installed
+
+5. **Check Prerequisites**:
+   - Verify Periphery is installed: `periphery version`
+   - Ensure Xcode is installed and working
+   - Test that your project builds in Xcode first
+   - Make sure conda environment is properly activated
+
+6. **Common Timeout Causes**:
+   - Large projects take time to analyze (up to 30 minutes for very large codebases)
+   - Network issues during Xcode dependency resolution
+   - Missing build dependencies or certificates
+   - Corrupted Xcode project files
+
+### Debug Output
+
+The server logs detailed debug information to stderr, which appears in Claude Desktop logs. Each tool execution shows:
+- Input parameters and path resolution
+- Command execution details and timing
+- Error messages with full stack traces
+- Periphery setup and scan progress
+
+Example debug log entries:
+```
+[PERIPHERY-MCP DEBUG] periphery_scan called with project_path: /path/to/project, extra_args: None
+[PERIPHERY-MCP DEBUG] Resolved project path: /path/to/project
+[PERIPHERY-MCP DEBUG] Checking for config file: /path/to/project/.periphery.yml
+[PERIPHERY-MCP DEBUG] Running build check
+[PERIPHERY-MCP DEBUG] Running periphery scan: periphery scan --format json
+[PERIPHERY-MCP DEBUG] Found 42 issues
+```
+
+### Testing with Your Project
+
+To test with a real iOS/macOS project, modify the test script:
+```python
+# Add this to test_tools.py
+result = project_build("/path/to/your/ios/project")
+print(f"Real project test: {result}")
+```
+   - Look for `[PERIPHERY-MCP DEBUG]` messages
+
+2. **Test the Server Manually**: Use the included test script:
+   ```bash
+   python test_mcp_server.py
+   ```
+   This will test basic server functionality and show debug output.
+
+3. **Check Prerequisites**:
+   - Verify Periphery is installed: `periphery version`
+   - Ensure Xcode is installed and working
+   - Test that your project builds in Xcode first
+
+4. **Common Timeout Causes**:
+   - Large projects take time to analyze (up to 30 minutes for very large codebases)
+   - Network issues during Xcode dependency resolution
+   - Missing build dependencies or certificates
+   - Corrupted Xcode project files
+
+### Debug Output
+
+The server now logs detailed debug information to stderr, which appears in Claude Desktop logs. Each tool execution will show:
+- Input parameters
+- Path resolution
+- Command execution details
+- Error messages and stack traces
+- Execution timing
+
 ### Common Issues
+
+**"Project path does not exist"**
+- Verify the path you're providing exists
+- Use absolute paths when possible
+- Check that you have read permissions for the directory
 
 **"Periphery setup failed"**
 - Ensure your project builds successfully in Xcode
@@ -195,17 +318,18 @@ The server automatically handles Periphery configuration through interactive set
 - Ensure all required certificates and provisioning profiles are available
 - Check that the specified scheme exists
 
-**Connection refused**
-- Verify the server is running: `curl http://localhost:4000/mcp/metadata`
-- Check that port 4000 isn't blocked by firewall
+**Connection issues**
+- Verify Claude Desktop configuration is correct
+- Check that the server executable path is correct
 - Ensure conda environment is activated
+- Check Claude Desktop logs for error details
 
-### Debug Mode
+### Performance Tips
 
-For detailed logging, run with debug output:
-```bash
-PYTHONPATH=. python periphery-mcp-server.py --log-level debug
-```
+- For large projects, start with a subset using `extra_args: ["--verbose"]`
+- Use build schemes that exclude test targets for faster analysis
+- Consider excluding vendor/third-party code directories
+- Run builds in Xcode first to ensure all dependencies are resolved
 
 ## Limitations
 
